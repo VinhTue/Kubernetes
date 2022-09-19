@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: global-connection
+data:
+  MongoDBSettings__DefaultConnection: "mongodb://HL7GetwayUser1:HL7GetwaySureEHRLacViet$abcdxyzHL7GetwayLisAnd#RisUser#11234506789User1HL7Getway@mongo:27017/admin"
+  SwaggerEndpoint: "/api/fhir/"
+---
+apiVersion: apps/v1
+kind: Deployment # change here
+metadata:
+  name: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - image: api_image
+        name: api
+        imagePullPolicy: Never
+        envFrom: # using envFrom instead of env
+          - configMapRef: # referencing the ConfigMap
+              name: global-connection # name of the ConfigMap
+        # env: 
+        #      -  name: "MongoDBSettings__DefaultConnection"
+        #         value: "mongodb://HL7GetwayUser1:HL7GetwaySureEHRLacViet$abcdxyzHL7GetwayLisAnd#RisUser#11234506789User1HL7Getway@mongo:27017/admin"
+        ports:
+          - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fhirapi
+spec:
+  type: LoadBalancer
+  selector:
+    app: api
+  ports:
+    - port: 8080
+      targetPort: 80
+      protocol: TCP
+      name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-gate-way
+  annotations:
+    # nginx.ingress.kubernetes.io/use-regex: "true"
+    certmanager.k8s.io/cluster-issuer: staging
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: localhost
+    http:
+      paths:
+      # - path: /
+      #   pathType: Prefix
+      #   backend:
+      #     service:
+      #       name: fhirapi
+      #       port:
+      #         number: 8080
+      - path: /api/fhir/(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: fhirapi
+            port:
+              number: 8080
